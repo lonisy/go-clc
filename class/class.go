@@ -3,7 +3,10 @@ package class
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+    "github.com/spf13/cast"
+    "go-clc/model"
+    "go-clc/tools"
+    "log"
 	"os"
 	"regexp"
 	"sort"
@@ -17,6 +20,22 @@ const (
 )
 
 var re = regexp.MustCompile(fmt.Sprintf(`^%s%s$`, prefix, suffix))
+var Categorys []model.Category
+var CateId uint
+
+func makeCateId() uint {
+	CateId = CateId + 1
+	return CateId
+}
+
+func findTopCategoryId(class string) uint {
+	for _, category := range Categorys {
+		if category.Notation == class {
+			return category.Id
+		}
+	}
+	return 0
+}
 
 // Verify verifies notation is legal or not.
 func Verify(notation string) (string, bool) {
@@ -55,7 +74,6 @@ func keys() (keys []string) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-
 	return
 }
 
@@ -63,9 +81,12 @@ type class string
 
 // Class represents Chinese Library Classification structure with subclass.
 type Class struct {
-	Notation string
-	Caption  string
-	SubClass []Class `json:",omitempty"`
+	Id       uint    `json:"id"`
+	Pid      uint    `json:"pid"`
+	Psn      string  `json:"psn"`
+	Notation string  `json:"sn"`
+	Caption  string  `json:"title"`
+	SubClass []Class `json:"sub,omitempty"`
 }
 
 func (c class) load(debug bool) []Class {
@@ -103,6 +124,47 @@ func (c class) load(debug bool) []Class {
 		}
 	}
 
+	return class
+}
+
+func (c class) tolist(debug bool, category string) []Class {
+	src := strings.Split(strings.TrimSpace(string(c)), "\n")
+	sort.Strings(src)
+
+	var class []Class
+	for _, line := range src {
+		s := strings.SplitN(line, " ", 2)
+		if len(s) != 2 {
+			panic(fmt.Sprintln("failed to convert string:", line))
+		}
+		notation, ok := Verify(s[0])
+		if !ok {
+			panic(fmt.Sprintln("bad CLC notation:", notation))
+		}
+		if dst := findClass(&class, notation); dst != nil {
+			if debug {
+				log.Println("found:", line, dst.Notation)
+			}
+			class = append(class, Class{
+				Notation: notation,
+				Caption:  s[1],
+				Psn:      dst.Notation,
+				Id:       makeCateId(),
+				Pid:      dst.Id,
+			})
+		} else {
+			if debug {
+				log.Println("not found:", line)
+			}
+			class = append(class, Class{
+				Notation: notation,
+				Caption:  s[1],
+				Id:       makeCateId(),
+				Pid:      findTopCategoryId(category),
+				Psn:      strings.ToUpper(category),
+			})
+		}
+	}
 	return class
 }
 
@@ -196,7 +258,6 @@ func exportJSON(dir, class string, debug bool) {
 		log.Fatal(err)
 	}
 	defer dst.Close()
-
 	if _, err := dst.Write(b); err != nil {
 		log.Fatal(err)
 	}
@@ -206,5 +267,44 @@ func exportJSON(dir, class string, debug bool) {
 func ExportJSON(dir string, debug bool) {
 	for _, class := range keys() {
 		exportJSON(dir, class, debug)
+	}
+}
+
+func ExportCategoryList(debug bool) {
+	for _, class := range keys() {
+		//if class != "S" {
+		//	continue
+		//}
+		data := index[class].tolist(debug, class)
+
+        for _, category := range data {
+            tools.Idata = append(tools.Idata, []string{
+                cast.ToString(category.Id),
+                cast.ToString(category.Pid),
+                cast.ToString(category.Psn),
+                cast.ToString(category.Notation),
+                cast.ToString(category.Caption),
+            })
+        }
+
+        // 写入数据库
+		path := fmt.Sprintf("%s/%s.json", "dir", class)
+		log.Println("Exporting", path)
+		b, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := os.MkdirAll("dir", 0755); err != nil {
+			log.Fatal(err)
+		}
+		dst, err := os.Create(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer dst.Close()
+		if _, err := dst.Write(b); err != nil {
+			log.Fatal(err)
+		}
+		// break
 	}
 }

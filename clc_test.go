@@ -1,4 +1,4 @@
-package clc
+package main
 
 import (
 	"reflect"

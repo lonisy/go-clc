@@ -1,18 +1,17 @@
-package clc
+package main
 
 import (
 	"fmt"
+	"go-clc/class"
 	"strings"
-
-	"github.com/sunshineplan/go-clc/class"
 )
 
 // CLC represents Chinese Library Classification structure.
 type CLC struct {
 	// A notation is a code commonly used in classification schemes to represent a class.
-	notation string
+	notation string `json:"sn"`
 	// class description.
-	caption string
+	caption string `json:"title"`
 }
 
 // TopClass is a list of top-level class defined in Chinese Library Classification.
@@ -47,7 +46,6 @@ func topClass(notation string) CLC {
 			return i
 		}
 	}
-
 	return CLC{}
 }
 
@@ -56,12 +54,10 @@ func str2clc(str string) CLC {
 	if len(s) != 2 {
 		panic(fmt.Sprintln("failed to convert string to clc:", str))
 	}
-
 	notation, ok := class.Verify(s[0])
 	if !ok {
 		panic(fmt.Sprintln("bad CLC notation:", notation))
 	}
-
 	return CLC{notation, s[1]}
 }
 
@@ -98,7 +94,6 @@ func searchCaption(notation string, dict *[]class.Class) (results []CLC) {
 			results = append(results, searchCaption(notation, &i.SubClass)...)
 		}
 	}
-
 	return
 }
 
@@ -109,13 +104,10 @@ func SearchByNotation(notation string) (CLC, error) {
 	if notation, ok = class.Verify(notation); !ok {
 		return CLC{}, fmt.Errorf("bad CLC notation: %s", notation)
 	}
-
 	results := searchCaption(notation, class.LoadClass(notation))
-
 	if len(results) == 0 {
 		return topClass(notation), nil
 	}
-
 	return results[len(results)-1], nil
 }
 
@@ -126,12 +118,10 @@ func SearchByCaption(caption string) (results []CLC) {
 	if len(caption) == 0 {
 		return
 	}
-
 	for _, i := range class.FindAll(caption) {
 		if clc := str2clc(i); strings.Contains(clc.caption, caption) {
 			results = append(results, clc)
 		}
-	}
-
+    }
 	return
 }
